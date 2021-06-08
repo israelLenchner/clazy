@@ -7,6 +7,8 @@ set(CLAZY_CHECKS_SRCS ${CLAZY_CHECKS_SRCS}
   ${CMAKE_CURRENT_LIST_DIR}/src/checks/manuallevel/inefficient-qlist.cpp
   ${CMAKE_CURRENT_LIST_DIR}/src/checks/manuallevel/isempty-vs-count.cpp
   ${CMAKE_CURRENT_LIST_DIR}/src/checks/manuallevel/jnisignatures.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/src/checks/manuallevel/ListAllMemLocChecker.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/src/checks/manuallevel/new-check-test.cpp
   ${CMAKE_CURRENT_LIST_DIR}/src/checks/manuallevel/qhash-with-char-pointer-key.cpp
   ${CMAKE_CURRENT_LIST_DIR}/src/checks/manuallevel/qproperty-type-mismatch.cpp
   ${CMAKE_CURRENT_LIST_DIR}/src/checks/manuallevel/qrequiredresult-candidates.cpp
@@ -14,10 +16,10 @@ set(CLAZY_CHECKS_SRCS ${CLAZY_CHECKS_SRCS}
   ${CMAKE_CURRENT_LIST_DIR}/src/checks/manuallevel/qt-keywords.cpp
   ${CMAKE_CURRENT_LIST_DIR}/src/checks/manuallevel/qt4-qstring-from-array.cpp
   ${CMAKE_CURRENT_LIST_DIR}/src/checks/manuallevel/qt6-deprecated-api-fixes.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/src/checks/manuallevel/qt6-fwd-fixes.cpp
   ${CMAKE_CURRENT_LIST_DIR}/src/checks/manuallevel/qt6-header-fixes.cpp
   ${CMAKE_CURRENT_LIST_DIR}/src/checks/manuallevel/qt6-qhash-signature.cpp
   ${CMAKE_CURRENT_LIST_DIR}/src/checks/manuallevel/qt6-qlatin1stringchar-to-u.cpp
-  ${CMAKE_CURRENT_LIST_DIR}/src/checks/manuallevel/qt6-fwd-fixes.cpp
   ${CMAKE_CURRENT_LIST_DIR}/src/checks/manuallevel/qvariant-template-instantiation.cpp
   ${CMAKE_CURRENT_LIST_DIR}/src/checks/manuallevel/raw-environment-function.cpp
   ${CMAKE_CURRENT_LIST_DIR}/src/checks/manuallevel/reserve-candidates.cpp
@@ -91,4 +93,5 @@ set(CLAZY_CHECKS_SRCS ${CLAZY_CHECKS_SRCS}
   ${CMAKE_CURRENT_LIST_DIR}/src/checks/level2/rule-of-three.cpp
   ${CMAKE_CURRENT_LIST_DIR}/src/checks/level2/static-pmf.cpp
   ${CMAKE_CURRENT_LIST_DIR}/src/checks/level2/virtual-call-ctor.cpp
+
 )

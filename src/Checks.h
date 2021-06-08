@@ -35,6 +35,7 @@
 #include "checks/manuallevel/inefficient-qlist.h"
 #include "checks/manuallevel/isempty-vs-count.h"
 #include "checks/manuallevel/jnisignatures.h"
+#include "checks/manuallevel/new-check-test.h"
 #include "checks/manuallevel/qhash-with-char-pointer-key.h"
 #include "checks/manuallevel/qproperty-type-mismatch.h"
 #include "checks/manuallevel/qrequiredresult-candidates.h"
@@ -42,10 +43,10 @@
 #include "checks/manuallevel/qt-keywords.h"
 #include "checks/manuallevel/qt4-qstring-from-array.h"
 #include "checks/manuallevel/qt6-deprecated-api-fixes.h"
+#include "checks/manuallevel/qt6-fwd-fixes.h"
 #include "checks/manuallevel/qt6-header-fixes.h"
 #include "checks/manuallevel/qt6-qhash-signature.h"
 #include "checks/manuallevel/qt6-qlatin1stringchar-to-u.h"
-#include "checks/manuallevel/qt6-fwd-fixes.h"
 #include "checks/manuallevel/qvariant-template-instantiation.h"
 #include "checks/manuallevel/raw-environment-function.h"
 #include "checks/manuallevel/reserve-candidates.h"
@@ -137,6 +138,7 @@ void CheckManager::registerChecks()
     registerCheck(check<InefficientQList>("inefficient-qlist", ManualCheckLevel,  RegisteredCheck::Option_VisitsDecls));
     registerCheck(check<IsEmptyVSCount>("isempty-vs-count", ManualCheckLevel,  RegisteredCheck::Option_VisitsStmts));
     registerCheck(check<JniSignatures>("jni-signatures", ManualCheckLevel,  RegisteredCheck::Option_VisitsStmts));
+//    registerCheck(check<NewCheckTest>("new-check-test", ManualCheckLevel,  RegisteredCheck::Option_VisitsStmts));
     registerCheck(check<QHashWithCharPointerKey>("qhash-with-char-pointer-key", ManualCheckLevel,  RegisteredCheck::Option_VisitsDecls));
     registerCheck(check<QPropertyTypeMismatch>("qproperty-type-mismatch", ManualCheckLevel,  RegisteredCheck::Option_VisitsDecls));
     registerCheck(check<QRequiredResultCandidates>("qrequiredresult-candidates", ManualCheckLevel,  RegisteredCheck::Option_VisitsDecls));
@@ -147,14 +149,14 @@ void CheckManager::registerChecks()
     registerFixIt(1, "fix-qt4-qstring-from-array", "qt4-qstring-from-array");
     registerCheck(check<Qt6DeprecatedAPIFixes>("qt6-deprecated-api-fixes", ManualCheckLevel,  RegisteredCheck::Option_VisitsStmts | RegisteredCheck::Option_VisitsDecls));
     registerFixIt(1, "fix-qt6-deprecated-api-fixes", "qt6-deprecated-api-fixes");
+    registerCheck(check<Qt6FwdFixes>("qt6-fwd-fixes", ManualCheckLevel,  RegisteredCheck::Option_VisitsDecls));
+    registerFixIt(1, "fix-qt6-fwd-fixes", "qt6-fwd-fixes");
     registerCheck(check<Qt6HeaderFixes>("qt6-header-fixes", ManualCheckLevel,  RegisteredCheck::Option_VisitsStmts));
     registerFixIt(1, "fix-qt6-header-fixes", "qt6-header-fixes");
     registerCheck(check<Qt6QHashSignature>("qt6-qhash-signature", ManualCheckLevel,  RegisteredCheck::Option_VisitsStmts | RegisteredCheck::Option_VisitsDecls));
     registerFixIt(1, "fix-qt6-qhash-signature", "qt6-qhash-signature");
     registerCheck(check<Qt6QLatin1StringCharToU>("qt6-qlatin1stringchar-to-u", ManualCheckLevel,  RegisteredCheck::Option_VisitsStmts));
     registerFixIt(1, "fix-qt6-qlatin1stringchar-to-u", "qt6-qlatin1stringchar-to-u");
-    registerCheck(check<Qt6FwdFixes>("qt6-fwd-fixes", ManualCheckLevel, RegisteredCheck::Option_VisitsDecls));
-    registerFixIt(1, "fix-qt6-fwd-fixes", "qt6-fwd-fixes");
     registerCheck(check<QVariantTemplateInstantiation>("qvariant-template-instantiation", ManualCheckLevel,  RegisteredCheck::Option_VisitsStmts));
     registerCheck(check<RawEnvironmentFunction>("raw-environment-function", ManualCheckLevel,  RegisteredCheck::Option_VisitsStmts));
     registerCheck(check<ReserveCandidates>("reserve-candidates", ManualCheckLevel,  RegisteredCheck::Option_VisitsStmts));

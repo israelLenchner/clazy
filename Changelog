@@ -142,3 +142,5 @@
 
 * v1.9 (2021)
     - Fixed clazy slowdown introduced in 1.8. I can be up to 4x faster now.
+
+  - <dont forget changelog entry for new-check-test>

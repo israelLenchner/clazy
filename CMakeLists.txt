@@ -193,6 +193,43 @@ if (NOT CLAZY_BUILD_WITH_CLANG)
     LINKER_LANGUAGE CXX
     PREFIX ""
   )
+#  add_clang_plugin(SampleAnalyzerPlugin src/checks/manuallevel/new-check-test.cpp  ${CLAZY_MINI_AST_DUMPER_SRCS})
+#  set_target_properties(SampleAnalyzerPlugin PROPERTIES
+#          LINKER_LANGUAGE CXX
+#          PREFIX ""
+#          )
+#  target_link_libraries(SampleAnalyzerPlugin
+#
+#          LINK_LIBS
+#          clangToolingCore
+#          clangToolingInclusions
+#          ${clang_tooling_refactoring_lib}
+#          clangFrontend
+#          clangDriver
+#          clangCodeGen
+#          clangSema
+#          clangAnalysis
+#          clangRewriteFrontend
+#          clangRewrite
+#          clangAST
+#          clangASTMatchers
+#          clangParse
+#          clangLex
+#          clangBasic
+#          clangARCMigrate
+#          clangEdit
+#          clangFrontendTool
+#          clangRewrite
+#          clangSerialization
+#          clangTooling
+#          clangStaticAnalyzerCheckers
+#          clangStaticAnalyzerCore
+#          clangStaticAnalyzerFrontend
+#          clangAnalysis
+#          clangAST
+#          clangStaticAnalyzerCore
+#          LLVMSupport
+#          )
 
   install(TARGETS ClazyPlugin
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
@@ -296,6 +333,11 @@ else()
     clangStaticAnalyzerCheckers
     clangStaticAnalyzerCore
     clangStaticAnalyzerFrontend
+    clangCrossTU
+    clangIndex
+    LLVMSupport
+
+
     )
   add_executable(clazy-standalone ${CLAZY_STANDALONE_SRCS})
 

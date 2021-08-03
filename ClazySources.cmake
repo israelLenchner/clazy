@@ -13,6 +13,7 @@ set(CLAZY_LIB_SRC
   ${CMAKE_CURRENT_LIST_DIR}/src/TemplateUtils.cpp
   ${CMAKE_CURRENT_LIST_DIR}/src/TypeUtils.cpp
   ${CMAKE_CURRENT_LIST_DIR}/src/Utils.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/src/ListAllMemLocChecker.cpp
 )
 
 set(CLAZY_CHECKS_SRCS

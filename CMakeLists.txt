@@ -296,6 +296,9 @@ else()
     clangStaticAnalyzerCheckers
     clangStaticAnalyzerCore
     clangStaticAnalyzerFrontend
+    clangCrossTU
+    clangIndex
+    LLVMSupport
     )
   add_executable(clazy-standalone ${CLAZY_STANDALONE_SRCS})
 

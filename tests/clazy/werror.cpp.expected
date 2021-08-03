@@ -1,1 +1,0 @@
-clazy/werror.cpp:5:5: error: qgetenv().isEmpty() allocates. Use qEnvironmentVariableIsEmpty() instead [-Wclazy-qgetenv]

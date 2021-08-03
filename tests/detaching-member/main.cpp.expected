@@ -1,6 +1,0 @@
-detaching-member/main.cpp:19:9: warning: Potential detachment due to calling QList<int>::begin() [-Wclazy-detaching-member]
-detaching-member/main.cpp:29:9: warning: Potential detachment due to calling QList<int>::begin() [-Wclazy-detaching-member]
-detaching-member/main.cpp:40:9: warning: Potential detachment due to calling QString::begin() [-Wclazy-detaching-member]
-detaching-member/main.cpp:41:9: warning: Potential detachment due to calling QString::operator[]() [-Wclazy-detaching-member]
-detaching-member/main.cpp:50:22: warning: Potential detachment due to calling QList<int>::operator[]() [-Wclazy-detaching-member]
-detaching-member/main.cpp:96:5: warning: Potential detachment due to calling QList<T *>::operator[]() [-Wclazy-detaching-member]

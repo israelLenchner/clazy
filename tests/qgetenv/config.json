@@ -1,9 +1,0 @@
-{
-    "tests" : [
-        {
-            "filename" : "main.cpp",
-            "has_fixits" : true,
-            "minimum_qt_version" : 50500
-        }
-    ]
-}

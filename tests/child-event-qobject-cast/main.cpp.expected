@@ -1,1 +1,0 @@
-child-event-qobject-cast/main.cpp:12:53: warning: qobject_cast in childEvent [-Wclazy-child-event-qobject-cast]

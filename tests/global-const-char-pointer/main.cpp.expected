@@ -1,1 +1,0 @@
-global-const-char-pointer/main.cpp:7:1: warning: non const global char * [-Wclazy-global-const-char-pointer]

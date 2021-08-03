@@ -1,1 +1,0 @@
-qt6-fwd-fixes/file1.cpp:2:1: warning: Using forward declaration of QCache. Including <QtCore/qcontainerfwd.h> instead. [-Wclazy-qt6-fwd-fixes]

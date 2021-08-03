@@ -1,2 +1,0 @@
-returning-void-expression/main.cpp:5:5: warning: Returning a void expression [-Wclazy-returning-void-expression]
-returning-void-expression/main.cpp:35:5: warning: Returning a void expression [-Wclazy-returning-void-expression]

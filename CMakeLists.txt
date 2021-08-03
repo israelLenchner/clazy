@@ -160,7 +160,7 @@ macro(add_clang_plugin name)
 
   if(${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.16.0")
       # 30% speedup
-      target_precompile_headers(${name} PRIVATE src/checkbase.h)
+#      target_precompile_headers(${name} PRIVATE src/checkbase.h)
   endif()
 
   if(SYMBOL_FILE)
@@ -187,7 +187,7 @@ endmacro()
 set(SYMBOL_FILE Lazy.exports)
 
 if (NOT CLAZY_BUILD_WITH_CLANG)
-  set(CLAZY_MINI_AST_DUMPER_SRCS src/MiniAstDumper.cpp)
+#  set(CLAZY_MINI_AST_DUMPER_SRCS src/MiniAstDumper.cpp)
   add_clang_plugin(ClazyPlugin ${CLAZY_PLUGIN_SRCS} ${CLAZY_MINI_AST_DUMPER_SRCS})
   set_target_properties(ClazyPlugin PROPERTIES
     LINKER_LANGUAGE CXX
@@ -232,9 +232,9 @@ if (NOT CLAZY_BUILD_WITH_CLANG)
   install(FILES README.md COPYING-LGPL2.txt checks.json DESTINATION ${CMAKE_INSTALL_DOCDIR})
 
   # Build docs
-  if (CLAZY_MAN_PAGE)
-    add_subdirectory(docs)
-  endif()
+#  if (CLAZY_MAN_PAGE)
+#    add_subdirectory(docs)
+#  endif()
 
   # rpath
   set(CMAKE_SKIP_BUILD_RPATH FALSE)
@@ -247,18 +247,18 @@ if (NOT CLAZY_BUILD_WITH_CLANG)
   endif("${isSystemDir}" STREQUAL "-1")
 
   # Build clazy-standalone
-  add_executable(clazy-standalone ${CLAZY_STANDALONE_SRCS})
+#  add_executable(clazy-standalone ${CLAZY_STANDALONE_SRCS})
 
   if(MSVC)
     # On MSVC clang-standalone crashes with a meaningless backtrace if linked to ClazyPlugin.dll
-    target_link_libraries(clazy-standalone clangFrontend)
+#    target_link_libraries(clazy-standalone clangFrontend)
   else()
-    target_link_libraries(clazy-standalone ClazyPlugin)
+#    target_link_libraries(clazy-standalone ClazyPlugin)
   endif()
 
-  link_to_llvm(clazy-standalone TRUE)
+#  link_to_llvm(clazy-standalone TRUE)
 
-  install(TARGETS clazy-standalone DESTINATION bin PERMISSIONS OWNER_WRITE OWNER_EXECUTE OWNER_READ GROUP_EXECUTE GROUP_READ WORLD_READ WORLD_EXECUTE)
+#  install(TARGETS clazy-standalone DESTINATION bin PERMISSIONS OWNER_WRITE OWNER_EXECUTE OWNER_READ GROUP_EXECUTE GROUP_READ WORLD_READ WORLD_EXECUTE)
 
   set(CPACK_PACKAGE_VERSION_MAJOR ${CLAZY_VERSION_MAJOR})
   set(CPACK_PACKAGE_VERSION_MINOR ${CLAZY_VERSION_MINOR})
@@ -300,11 +300,11 @@ else()
     clangIndex
     LLVMSupport
     )
-  add_executable(clazy-standalone ${CLAZY_STANDALONE_SRCS})
+#  add_executable(clazy-standalone ${CLAZY_STANDALONE_SRCS})
 
-  target_link_libraries(clazy-standalone clazyPlugin)
+#  target_link_libraries(clazy-standalone clazyPlugin)
 
-  install(TARGETS clazy-standalone DESTINATION bin PERMISSIONS OWNER_WRITE OWNER_EXECUTE OWNER_READ GROUP_EXECUTE GROUP_READ WORLD_READ WORLD_EXECUTE)
+#  install(TARGETS clazy-standalone DESTINATION bin PERMISSIONS OWNER_WRITE OWNER_EXECUTE OWNER_READ GROUP_EXECUTE GROUP_READ WORLD_READ WORLD_EXECUTE)
 endif()
 
 function(to_raw_string_literal input_string output_string)

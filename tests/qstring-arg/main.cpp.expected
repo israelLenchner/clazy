@@ -1,2 +1,0 @@
-qstring-arg/main.cpp:27:46: warning: Use multi-arg instead [-Wclazy-qstring-arg]
-qstring-arg/main.cpp:29:37: warning: Use multi-arg instead [-Wclazy-qstring-arg]

@@ -1,5 +1,6 @@
 set(CLAZY_LIB_SRC
         ${CMAKE_CURRENT_LIST_DIR}/src/ListAllMemLocChecker.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/ConditionalAccessesChecker.cpp
 )
 
 #set(CLAZY_CHECKS_SRCS

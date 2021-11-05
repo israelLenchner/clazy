@@ -45,9 +45,12 @@ if (NOT LLVM_ROOT AND DEFINED ENV{LLVM_ROOT})
     file(TO_CMAKE_PATH "$ENV{LLVM_ROOT}" LLVM_ROOT)
 endif()
 
+set(LLVM_ROOT "/usr/local")
 # if the user specified LLVM_ROOT, use that and fail otherwise
 if (LLVM_ROOT)
-  find_program(LLVM_CONFIG_EXECUTABLE NAMES llvm-config HINTS ${LLVM_ROOT}/bin DOC "llvm-config executable" NO_DEFAULT_PATH)
+  # find_program look at /usr/bin and not /usr/local/bin. set LLVM_CONFIG_EXECUTABLE manually,
+#  find_program(LLVM_CONFIG_EXECUTABLE NAMES llvm-config PATHS ${LLVM_ROOT}/bin DOC "llvm-config executable" NO_DEFAULT_PATH)
+  set(LLVM_CONFIG_EXECUTABLE ${LLVM_ROOT}/bin/llvm-config)
 else()
   # find llvm-config, prefer the one with a version suffix, e.g. llvm-config-3.5
   # note: FreeBSD installs llvm-config as llvm-config35 and so on

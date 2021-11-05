@@ -1,8 +1,9 @@
 //
-// Created by israel lenchner on 06/06/2021.
+// Created by Israel Lenchner on 06/06/2021.
 //
 
 #include "ListAllMemLocChecker.h"
+#include "ConditionalAccessesChecker.h"
 
 using namespace clang;
 using namespace ento;
@@ -27,7 +28,6 @@ ListAllMemLocChecker::ListAllMemLocChecker(): F(true),duplicablesSet(F.getEmptyS
     std::ifstream MyReadFile("./cache/duplicable_list.txt");
     string Line;
     while (getline (MyReadFile, Line)) {
-
         std::istringstream ss(Line);
         string dupName;
         int num;
@@ -57,12 +57,11 @@ void ListAllMemLocChecker::checkPreCall(const CallEvent &Call, CheckerContext &C
         return;
     const FunctionDecl *FuncDecl = FC->getDecl();
     string funcName = FuncDecl->getNameAsString();
-    // we need the set quota calles only
+    // we need the set quota calls only
     if(funcName != "HAL_TASK_SET_QUOTA")
         return;
     llvm::errs()<<"call to HAL_TASK_SET_QUOTA\n";
     SVal quotaSVal = Call.getArgSVal(0);
-
     quotaSVal.dump();
     llvm::errs()<<"\n";
 
@@ -74,9 +73,6 @@ void ListAllMemLocChecker::checkPreCall(const CallEvent &Call, CheckerContext &C
         uint64_t Int = CI.getValue().getValue().getLimitedValue();
         llvm::errs()<<"the concrete value of the quota is "<< std::to_string(Int)<<"\n";
     }
-
-//    quotaSVal.
-//    quotaSVal.
 
     ConstraintManager &CM = C.getConstraintManager();
     //CM.assumeInclusiveRange()
@@ -99,7 +95,7 @@ void ListAllMemLocChecker::checkPreCall(const CallEvent &Call, CheckerContext &C
 /// regardless of whether it is analyzed at the top level or is inlined.
 ///
 /// check::BeginFunction
-/// this callback will be called for both anlyzing the top level and for inlining analyze, I'm assuming that there is
+/// this callback will be called for both analyzing the top level and for inlining analyze, I'm assuming that there is
 /// no direct call for tasks, so we will analyze it only for the top level
 void ListAllMemLocChecker::checkBeginFunction(CheckerContext &Ctx) const {
 
@@ -135,14 +131,10 @@ void ListAllMemLocChecker::checkBeginFunction(CheckerContext &Ctx) const {
 
     dupMepTy::data_type *maxInstances = duplicabsleMap.lookup(StringWrapper(funcName));
     llvm::errs()<<"\n dup: " <<funcName<<" num_instances: "<< std::to_string(*maxInstances)<<"\n";
-
-//    const char* tmpArr[] = {"0","1","2","3"};
     for(int i=0;i<*maxInstances;i++){
         llvm::APSInt number(std::to_string(i).c_str());
         auto newState = State->assumeInclusiveRange(InstanceIDSval.castAs <DefinedOrUnknownSVal >(), number, number, true);
         newState = newState->add<instanceIDState>(StringWrapper(std::to_string(i).c_str()));
-//        const instanceIDStateTy &instanceIDSet = newState->get<instanceIDState>();
-//        (*(instanceIDSet.begin())).get();
         Ctx.addTransition(newState);
     }
 
@@ -168,6 +160,7 @@ void ListAllMemLocChecker::checkBeginFunction(CheckerContext &Ctx) const {
 
 void ListAllMemLocChecker::checkEndFunction(const ReturnStmt *RS, CheckerContext &Ctx) const {
 
+    //TODO: needs to dump memory access only when we finish analyzing a task, not any function
     ProgramStateRef State = Ctx.getState();
 
     //const auto *LCtx = Ctx.getLocationContext();
@@ -196,7 +189,6 @@ void ListAllMemLocChecker::checkEndFunction(const ReturnStmt *RS, CheckerContext
 
 
     const loadAccessListTy &loadSymsList = State->get<loadAccessList>();
-
     for (loadAccessListTy::iterator I = loadSymsList.begin(), E = loadSymsList.end(); I != E; ++I) {
         accessElement elem=*I;
 
@@ -251,17 +243,13 @@ void ListAllMemLocChecker::checkLocation(SVal Loc, bool IsLoad, const Stmt *S,
     llvm::raw_string_ostream os(msg);
 //    Loc.dumpToStream(os);
     //Loc.dump();
-    const MemRegion* memRegion = Loc.getAsRegion();
     if(Loc.getAsSymExpr()){
         llvm::errs()<<"getAsSymExpr\n";
         Loc.getAsSymExpr()->dump();
     }
 
-//    os<< "  memRegion->getDescriptiveName: " << memRegion->getDescriptiveName();
-//    os<<"       memRegion->getString():"<<memRegion->getString();
+    const MemRegion* memRegion = Loc.getAsRegion();
     ProgramStateRef State = C.getState();
-//    State = State->add<accessList>(memRegion);
-//    State = State->set<accessMap>(memRegion,IsLoad);
     if(IsGlobalVAriable(memRegion)){
         if(IsLoad){
             State = State->add<loadAccessList>(memRegion);
@@ -270,16 +258,26 @@ void ListAllMemLocChecker::checkLocation(SVal Loc, bool IsLoad, const Stmt *S,
         }
     }
 
+//    ExplodedNode *N = C.generateNonFatalErrorNode();
+//    if (!N)
+//        return;
+//
+//    if (!BT)
+//        BT.reset(new BugType(this, "call to main", "example analyzer plugin"));
+//
+//    auto report =
+//            std::make_unique<PathSensitiveBugReport>(*BT, BT->getDescription(), N);
+////    report->addRange(Callee->getSourceRange());
+//    C.emitReport(std::move(report));
+//    llvm::errs()<<"emitting report\n";
+
     C.addTransition(State);
 
 }
 
-extern "C" const char clang_analyzerAPIVersionString[] =
-        CLANG_ANALYZER_API_VERSION_STRING;
 
 
-extern "C"
-void clang_registerCheckers (CheckerRegistry &registry) {
+extern "C" void my_checker_registration(CheckerRegistry &registry){
     registry.addChecker <ListAllMemLocChecker >("alpha.core.ListAllMemLoc",
-                                          "save all memory accesses locations to a file","");
+                                                "save all memory accesses locations to a file","");
 }

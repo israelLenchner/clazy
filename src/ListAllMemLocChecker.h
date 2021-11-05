@@ -1,5 +1,5 @@
 //
-// Created by israel lenchner on 22/06/2021.
+// Created by Israel Lenchner on 22/06/2021.
 //
 
 #ifndef CLAZY_LISTALLMEMLOCCHECKER_H
@@ -17,6 +17,7 @@
 #include <sstream>
 #include <iostream>
 #include <fstream>
+
 
 class StringWrapper;
 
@@ -70,7 +71,7 @@ namespace {
 } // end anonymous namespace
 
 
-
+extern "C" void my_checker_registration(CheckerRegistry &registry);
 
 
 

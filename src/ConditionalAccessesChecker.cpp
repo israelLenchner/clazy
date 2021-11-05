@@ -3,11 +3,6 @@
 //
 
 #include "ConditionalAccessesChecker.h"
-//saves for each task read/write access a map between the MemRegion to a set of ProgramStateRef in which it got accesses.
-REGISTER_SET_FACTORY_WITH_PROGRAMSTATE(StateSet, ProgramStateRefWrapper)
-REGISTER_MAP_FACTORY_WITH_PROGRAMSTATE(AccessesMap, const MemRegion*, StateSet)
-REGISTER_MAP_WITH_PROGRAMSTATE(WriteMap,StringWrapper, AccessesMap)
-REGISTER_SET_WITH_PROGRAMSTATE(CurTaskName, StringWrapper)
 
 
 void ConditionalAccessesChecker::checkBeginFunction(CheckerContext &Ctx) const {
@@ -29,11 +24,13 @@ void ConditionalAccessesChecker::checkBeginFunction(CheckerContext &Ctx) const {
     auto &F = State->getStateManager().get_context<CurTaskName>();
     State = State->set<CurTaskName>(F.add(F.getEmptySet(),StringWrapper(Name)));
 
-    //init write map
+    //init read/write map
     if(stackFrame->inTopFrame() && funcName == auxFunc){
         auto &AccessesMapF = State->getStateManager().get_context<AccessesMap>();
         State = State->set<WriteMap>(StringWrapper(taskA),AccessesMapF.getEmptyMap());
         State = State->set<WriteMap>(StringWrapper(taskB),AccessesMapF.getEmptyMap());
+        State = State->set<ReadMap>(StringWrapper(taskA),AccessesMapF.getEmptyMap());
+        State = State->set<ReadMap>(StringWrapper(taskB),AccessesMapF.getEmptyMap());
     }
     Ctx.addTransition(State);
 
@@ -62,11 +59,12 @@ void ConditionalAccessesChecker::checkLocation(SVal Loc, bool IsLoad, const Stmt
     if(IsLoad){
 //           State = State->add<CurrWriteMap>(memRegion);
     }else{
-//        const StateSet* write = (CurTaskName==taskA) ? State->get<AWriteMap>(memRegion) : State->get<BWriteMap>(memRegion);
         const AccessesMap *accessesMap = State->get<WriteMap>(CurTaskName) ;
         const StateSet* write = accessesMap->lookup(memRegion) ;
-        StateSet newSet = (write) ? stateSetF.add(*write, ProgramStateRefWrapper(State)) :
-                          stateSetF.add(stateSetF.getEmptySet(), ProgramStateRefWrapper(State));
+        // Later, in checkEndAnalysis, we'd throw a report against it if a Race is found.
+        ExplodedNode *errorNode = C.generateNonFatalErrorNode();
+        StateSet newSet = (write) ? stateSetF.add(*write, errorNode) :
+                          stateSetF.add(stateSetF.getEmptySet(), errorNode);
         AccessesMap newAccessesMap = accessesMapF.remove(*accessesMap, memRegion);
         newAccessesMap = accessesMapF.add(newAccessesMap, memRegion, newSet);
         State = State->set<WriteMap>(CurTaskName,newAccessesMap) ;
@@ -117,67 +115,51 @@ bool checkSat(ProgramStateRef State1, ProgramStateRef State2){
 
 }
 
-void checkPathsViability(const StateSet *set1,const StateSet *set2){
-    bool pathsViable = false;
-    for(auto it1 = set1->begin(); it1!=set1->end(); ++it1){
-        for(auto it2 = set2->begin(); it2!=set2->end(); ++it2){
-            ProgramStateRef State1 = it1->get();
-            ProgramStateRef State2 = it2->get();
-            //TODO: use a safe type conversion
-            SMTConstraintManager *CM = (SMTConstraintManager*) &State1->getConstraintManager();
-
-            checkSat(State1,State2);
-
-            State1->getConstraintManager().printJson(llvm::errs(),State1, "\n", 4, false);
-            State2->getConstraintManager().printJson(llvm::errs(),State2, "\n", 4, false);
-
-            ConstraintSMTType C1 = State1->get<ConstraintSMT>();
-            ConstraintSMTType C2 = State2->get<ConstraintSMT>();
-
-//    auto C1 = State1->get<ConstraintSMT>();
-//    auto C2 = State1->get<ConstraintSMT>();
-            llvm::SMTSolverRef Solver = llvm::CreateZ3Solver();
-            auto I1 = C1.begin(), IE1 = C1.end();
-            auto I2 = C2.begin(), IE2 = C2.end();
-            if(I1 == IE1 ){
-                llvm::errs()<<"checkPathsViability E1 empty\n";
-            }
-            if(I2 == IE2){
-                llvm::errs()<<"checkPathsViability E2 empty\n";
-            }
-            // if one of the states don't have constrains and the other is satisfiable then the union is satisfiable
-            if(I1 == IE1 || I2 == IE2){
-                llvm::errs()<<"checkPathsViability empty\n";
-            }
-
-        }
-    }
-}
-//void checkPath(ExplodedGraph &G, AWriteMapTy writeMap, string Task2Check){
-//    for( auto i = G.eop_begin(); i!=G.eop_end(); ++i){
-//        ProgramStateRef State = (*i)->getState();
-//        CurTaskNameTy CurTaskNameSet = State->get<CurTaskName>();
-//        if(CurTaskNameSet.isEmpty()) {
-//            llvm::errs() << "checkEndAnalysis: CurTaskNameSet is empty\n";
-//            continue;
-//        }
-//        string CurTaskName = CurTaskNameSet.begin()->get();
-//        if(CurTaskName !=Task2Check)
-//            continue;
-//        AWriteMapTy writeMap2 = State->get<AWriteMap>();
-//        for( auto it = writeMap.begin(); it != writeMap.end(); ++it){
-//            const StateSet *set2 = writeMap2.lookup(it->first);
-//            if(!set2)
-//                continue;
-//            llvm::errs()<<"found colliding access :"<< it->first->getDescriptiveName().c_str() <<"\n";
-//            checkPathsViability(&it->second, set2);
+//void checkPathsViability(const StateSet *set1,const StateSet *set2){
+//    bool pathsViable = false;
+//    for(auto it1 = set1->begin(); it1!=set1->end(); ++it1){
+//        for(auto it2 = set2->begin(); it2!=set2->end(); ++it2){
+//            ProgramStateRef State1 = it1->get();
+//            ProgramStateRef State2 = it2->get();
+//            //TODO: use a safe type conversion
+//            SMTConstraintManager *CM = (SMTConstraintManager*) &State1->getConstraintManager();
+//
+//            checkSat(State1,State2);
+//
+//            State1->getConstraintManager().printJson(llvm::errs(),State1, "\n", 4, false);
+//            State2->getConstraintManager().printJson(llvm::errs(),State2, "\n", 4, false);
+//
+//            ConstraintSMTType C1 = State1->get<ConstraintSMT>();
+//            ConstraintSMTType C2 = State2->get<ConstraintSMT>();
+//
+////    auto C1 = State1->get<ConstraintSMT>();
+////    auto C2 = State1->get<ConstraintSMT>();
+//            llvm::SMTSolverRef Solver = llvm::CreateZ3Solver();
+//            auto I1 = C1.begin(), IE1 = C1.end();
+//            auto I2 = C2.begin(), IE2 = C2.end();
+//            if(I1 == IE1 ){
+//                llvm::errs()<<"checkPathsViability E1 empty\n";
+//            }
+//            if(I2 == IE2){
+//                llvm::errs()<<"checkPathsViability E2 empty\n";
+//            }
+//            // if one of the states don't have constrains and the other is satisfiable then the union is satisfiable
+//            if(I1 == IE1 || I2 == IE2){
+//                llvm::errs()<<"checkPathsViability empty\n";
+//            }
 //
 //        }
 //    }
 //}
+
 using MemRegionSet = std::set<const MemRegion*>;
+
 MemRegionSet findMutualAccesses(const AccessesMap *AMA, const AccessesMap *AMB){
+
     MemRegionSet mutualSet = MemRegionSet();
+    if(!AMA || !AMB)
+        return mutualSet;
+
     for(auto it = AMA->begin(); it != AMA->end(); ++it){
         if(AMB->contains(it->first))
             mutualSet.insert(it->first);
@@ -187,6 +169,26 @@ MemRegionSet findMutualAccesses(const AccessesMap *AMA, const AccessesMap *AMB){
         llvm::errs()<<"colliding access on: "<< memRegion->getDescriptiveName().c_str() <<"\n";
     }
     return mutualSet;
+}
+
+void ConditionalAccessesChecker::reportCollidingAccesses(const StateSet *SSA, const StateSet *SSB, BugReporter &BR, ExplodedNode * node) const{
+    if(!SSA|| !SSB)
+        return;
+    llvm::errs()<<"reportCollidingAccesses\n";
+
+    for(auto PSA = SSA->begin(); PSA !=SSA->end(); ++SSA){
+        for (auto PSB = SSB->begin(); PSB != SSB->end(); ++SSB) {
+//            const ProgramStateRef StateA = PSA->get();
+
+//            if (!BT)
+//                BT.reset(new BugType(this, "ConditionalAccessesChecker", "Data race"));
+//            auto report =
+//                    std::make_unique<PathSensitiveBugReport>(*BT, BT->getDescription(), node);
+////    report->addRange(Callee->getSourceRange());
+//            BR.emitReport(std::move(report));
+            llvm::errs() << "emitting report\n";
+        }
+    }
 }
 
 void ConditionalAccessesChecker::checkEndAnalysis(ExplodedGraph &G, BugReporter &BR, ExprEngine &Eng) const{
@@ -209,12 +211,37 @@ void ConditionalAccessesChecker::checkEndAnalysis(ExplodedGraph &G, BugReporter 
     if(funcName!=auxFunc)
         return;
 
-    //TODO: filter all end nodes to look only at the relevant ones.
     for( auto i = G.eop_begin(); i!=G.eop_end(); ++i){
         ProgramStateRef State = (*i)->getState();
         WriteMapTy writeMap = State->get<WriteMap>();
-        MemRegionSet mutualSet = findMutualAccesses(writeMap.lookup(taskA), writeMap.lookup(taskB));
+        const AccessesMap *AMA = writeMap.lookup(taskA);
+        const AccessesMap *AMB = writeMap.lookup(taskB);
+        if(!AMA || !AMB)
+            continue;
+        MemRegionSet mutualSet = findMutualAccesses(AMA, AMB);
+        for(const MemRegion* memRegion : mutualSet){
+            const StateSet *SSA = AMA->lookup(memRegion);
+            const StateSet *SSB = AMB->lookup(memRegion);
+            // memRegion must be in both maps
+            assert(SSA&&SSB);
+//            reportCollidingAccesses(SSA, SSB, BR, (*i));
 
+            string desc = string("Access to ") + memRegion->getDescriptiveName().c_str();
+            if (!BT)
+                BT.reset(new BugType(this, desc, "Data race"));
+            for(auto it = SSA->begin(); it != SSA->end(); ++it)
+            {
+                auto report =
+                        std::make_unique<PathSensitiveBugReport>(*BT, BT->getDescription(), *it);
+                BR.emitReport(std::move(report));
+            }
+            for(auto it = SSB->begin(); it != SSB->end(); ++it)
+            {
+                auto report =
+                        std::make_unique<PathSensitiveBugReport>(*BT, BT->getDescription(), *it);
+                BR.emitReport(std::move(report));
+            }
+        }
     }
 }
 

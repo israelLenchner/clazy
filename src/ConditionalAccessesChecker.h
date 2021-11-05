@@ -52,8 +52,8 @@ namespace {
         ConditionalAccessesChecker(){}
 
     private:
-        void reportCollidingAccesses(const StateSet *SSA, const StateSet *SSB, BugReporter &BR, ExplodedNode * node) const;
-
+        void reportCollidingAccesses(const AccessesMap *AMA, const AccessesMap *AMB, BugReporter &BR, string bugType,
+                                     string AAccessType, string BAccessType) const;
     };
 } // end  namespace
 
@@ -87,6 +87,7 @@ public:
         return (rangeref.getBegin()!=RHS.get().getBegin())
         ? rangeref.getBegin()<RHS.get().getBegin() : rangeref.getEnd()<RHS.get().getEnd();
     }
+
 
 };
 #endif //CLAZY_CONDITIONALACCESSESCHECKER_H

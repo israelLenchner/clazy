@@ -5,31 +5,36 @@
 #include "ConditionalAccessesChecker.h"
 //saves for each task read/write access a map between the MemRegion to a set of ProgramStateRef in which it got accesses.
 REGISTER_SET_FACTORY_WITH_PROGRAMSTATE(StateSet, ProgramStateRefWrapper)
-REGISTER_MAP_WITH_PROGRAMSTATE(AWriteMap, const MemRegion*, StateSet)
-REGISTER_MAP_WITH_PROGRAMSTATE(BWriteMap,const MemRegion*, StateSet)
-REGISTER_MAP_WITH_PROGRAMSTATE(CurrWriteMap, const MemRegion*, StateSet)
+REGISTER_MAP_FACTORY_WITH_PROGRAMSTATE(AccessesMap, const MemRegion*, StateSet)
+REGISTER_MAP_WITH_PROGRAMSTATE(WriteMap,StringWrapper, AccessesMap)
 REGISTER_SET_WITH_PROGRAMSTATE(CurTaskName, StringWrapper)
 
 
 void ConditionalAccessesChecker::checkBeginFunction(CheckerContext &Ctx) const {
 
 //    llvm::errs()<<"checkBeginFunction\n";
-
-    const FunctionDecl *Func = dyn_cast<FunctionDecl>(Ctx.getStackFrame()->getDecl());
+    const StackFrameContext *stackFrame = Ctx.getStackFrame();
+    const FunctionDecl *Func = dyn_cast<FunctionDecl>(stackFrame->getDecl());
     if (!Func)
         return;
-    const StackFrameContext *stackFrame = Ctx.getStackFrame();
-    // this is only for duplicable task which don't have a direct call (true for all tasks)
-    if(!stackFrame->inTopFrame())
-        return;
-//    llvm::errs()<<"checkBeginFunction: inTopFrame\n";
     string funcName = Func->getNameAsString();
-//    llvm::errs()<<"funcName: "<< funcName << "\n";
+
+    // this is only for duplicable task which don't have a direct call (true for all tasks)
+    // Since we use a workaround, the Duplicable tasks are not in top Frame
+//    if(!stackFrame->inTopFrame())
+//        return;
+
     ProgramStateRef State = Ctx.getState();
-    string Name = (funcName == taskA || funcName == taskB)? funcName: "";
-//    llvm::errs()<<"funcName: "<< funcName << "\n";
+    string Name = ( (!stackFrame->inTopFrame()) && (funcName == taskA || funcName == taskB) ) ? funcName: "";
     auto &F = State->getStateManager().get_context<CurTaskName>();
     State = State->set<CurTaskName>(F.add(F.getEmptySet(),StringWrapper(Name)));
+
+    //init write map
+    if(stackFrame->inTopFrame() && funcName == auxFunc){
+        auto &AccessesMapF = State->getStateManager().get_context<AccessesMap>();
+        State = State->set<WriteMap>(StringWrapper(taskA),AccessesMapF.getEmptyMap());
+        State = State->set<WriteMap>(StringWrapper(taskB),AccessesMapF.getEmptyMap());
+    }
     Ctx.addTransition(State);
 
 
@@ -51,17 +56,20 @@ void ConditionalAccessesChecker::checkLocation(SVal Loc, bool IsLoad, const Stmt
     if(CurTaskName =="")
         return;
 
-    StateSet::Factory &F = State->getStateManager().get_context<StateSet>();
+    StateSet::Factory &stateSetF = State->getStateManager().get_context<StateSet>();
+    AccessesMap::Factory &accessesMapF = State->getStateManager().get_context<AccessesMap>();
 
     if(IsLoad){
 //           State = State->add<CurrWriteMap>(memRegion);
     }else{
 //        const StateSet* write = (CurTaskName==taskA) ? State->get<AWriteMap>(memRegion) : State->get<BWriteMap>(memRegion);
-        const StateSet* write = State->get<AWriteMap>(memRegion) ;
-        StateSet newSet = (write) ? F.add(*write, ProgramStateRefWrapper(State)) :
-                F.add(F.getEmptySet(), ProgramStateRefWrapper(State));
-//        State = (CurTaskName==taskA) ? State->set<AWriteMap>(memRegion,newSet) : State->set<BWriteMap>(memRegion,newSet);
-        State = State->set<AWriteMap>(memRegion,newSet) ;
+        const AccessesMap *accessesMap = State->get<WriteMap>(CurTaskName) ;
+        const StateSet* write = accessesMap->lookup(memRegion) ;
+        StateSet newSet = (write) ? stateSetF.add(*write, ProgramStateRefWrapper(State)) :
+                          stateSetF.add(stateSetF.getEmptySet(), ProgramStateRefWrapper(State));
+        AccessesMap newAccessesMap = accessesMapF.remove(*accessesMap, memRegion);
+        newAccessesMap = accessesMapF.add(newAccessesMap, memRegion, newSet);
+        State = State->set<WriteMap>(CurTaskName,newAccessesMap) ;
         C.addTransition(State);
     }
 
@@ -145,43 +153,67 @@ void checkPathsViability(const StateSet *set1,const StateSet *set2){
         }
     }
 }
-void checkPath(ExplodedGraph &G, AWriteMapTy writeMap, string Task2Check){
-    for( auto i = G.eop_begin(); i!=G.eop_end(); ++i){
-        ProgramStateRef State = (*i)->getState();
-        CurTaskNameTy CurTaskNameSet = State->get<CurTaskName>();
-        if(CurTaskNameSet.isEmpty()) {
-            llvm::errs() << "checkEndAnalysis: CurTaskNameSet is empty\n";
-            continue;
-        }
-        string CurTaskName = CurTaskNameSet.begin()->get();
-        if(CurTaskName !=Task2Check)
-            continue;
-        AWriteMapTy writeMap2 = State->get<AWriteMap>();
-        for( auto it = writeMap.begin(); it != writeMap.end(); ++it){
-            const StateSet *set2 = writeMap2.lookup(it->first);
-            if(!set2)
-                continue;
-            llvm::errs()<<"found colliding access :"<< it->first->getDescriptiveName().c_str() <<"\n";
-            checkPathsViability(&it->second, set2);
-
-        }
+//void checkPath(ExplodedGraph &G, AWriteMapTy writeMap, string Task2Check){
+//    for( auto i = G.eop_begin(); i!=G.eop_end(); ++i){
+//        ProgramStateRef State = (*i)->getState();
+//        CurTaskNameTy CurTaskNameSet = State->get<CurTaskName>();
+//        if(CurTaskNameSet.isEmpty()) {
+//            llvm::errs() << "checkEndAnalysis: CurTaskNameSet is empty\n";
+//            continue;
+//        }
+//        string CurTaskName = CurTaskNameSet.begin()->get();
+//        if(CurTaskName !=Task2Check)
+//            continue;
+//        AWriteMapTy writeMap2 = State->get<AWriteMap>();
+//        for( auto it = writeMap.begin(); it != writeMap.end(); ++it){
+//            const StateSet *set2 = writeMap2.lookup(it->first);
+//            if(!set2)
+//                continue;
+//            llvm::errs()<<"found colliding access :"<< it->first->getDescriptiveName().c_str() <<"\n";
+//            checkPathsViability(&it->second, set2);
+//
+//        }
+//    }
+//}
+using MemRegionSet = std::set<const MemRegion*>;
+MemRegionSet findMutualAccesses(const AccessesMap *AMA, const AccessesMap *AMB){
+    MemRegionSet mutualSet = MemRegionSet();
+    for(auto it = AMA->begin(); it != AMA->end(); ++it){
+        if(AMB->contains(it->first))
+            mutualSet.insert(it->first);
     }
+
+    for(const MemRegion* memRegion : mutualSet){
+        llvm::errs()<<"colliding access on: "<< memRegion->getDescriptiveName().c_str() <<"\n";
+    }
+    return mutualSet;
 }
 
 void ConditionalAccessesChecker::checkEndAnalysis(ExplodedGraph &G, BugReporter &BR, ExprEngine &Eng) const{
+    //First check if this is the aux function
+    string funcName = "";
+    for( auto i = G.roots_begin(); i!=G.roots_end(); ++i){
+        const StackFrameContext * stackFrame = (*i)->getStackFrame();
+        if(!stackFrame->inTopFrame()){
+            llvm::errs()<<"checkEndAnalysis: root is not top frame\n";
+            return;
+        }
+        const FunctionDecl *Func = dyn_cast<FunctionDecl>(stackFrame->getDecl());
+        if (!Func){
+            llvm::errs()<<"checkEndAnalysis: root is not Function declaration\n";
+            return;
+        }
+        funcName = Func->getNameAsString();
+        break;
+    }
+    if(funcName!=auxFunc)
+        return;
+
     //TODO: filter all end nodes to look only at the relevant ones.
     for( auto i = G.eop_begin(); i!=G.eop_end(); ++i){
         ProgramStateRef State = (*i)->getState();
-        CurTaskNameTy CurTaskNameSet = State->get<CurTaskName>();
-        if(CurTaskNameSet.isEmpty()) {
-            llvm::errs() << "checkEndAnalysis: CurTaskNameSet is empty\n";
-            continue;
-        }
-        string CurTaskName = CurTaskNameSet.begin()->get();
-        if(CurTaskName =="")
-            continue;
-        AWriteMapTy writeMap = State->get<AWriteMap>();
-        checkPath(G, writeMap, (CurTaskName==taskA)? taskB:taskA);
+        WriteMapTy writeMap = State->get<WriteMap>();
+        MemRegionSet mutualSet = findMutualAccesses(writeMap.lookup(taskA), writeMap.lookup(taskB));
 
     }
 }

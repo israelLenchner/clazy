@@ -13,6 +13,7 @@
 #include "clang/StaticAnalyzer/Frontend/CheckerRegistry.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/CallEvent.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/SMTConstraintManager.h"
+#include "clang/StaticAnalyzer/Core/PathSensitive/ExplodedGraph.h"
 #include "clang/Analysis/CFG.h"
 
 #include "ListAllMemLocChecker.h"
@@ -30,6 +31,7 @@ namespace {
         mutable std::unique_ptr<BugType> BT;
         std::string taskA = "task_A";
         std::string taskB ="task_B" ;
+        std::string auxFunc = "conditional_aux";
 
     public:
         void checkLocation(SVal Loc, bool IsLoad, const Stmt *S, CheckerContext & C) const;

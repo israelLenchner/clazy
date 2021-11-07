@@ -3,7 +3,6 @@
 //
 
 #include "ListAllMemLocChecker.h"
-#include "ConditionalAccessesChecker.h"
 
 using namespace clang;
 using namespace ento;
@@ -74,21 +73,16 @@ void ListAllMemLocChecker::checkPreCall(const CallEvent &Call, CheckerContext &C
         llvm::errs()<<"the concrete value of the quota is "<< std::to_string(Int)<<"\n";
     }
 
-    ConstraintManager &CM = C.getConstraintManager();
-    //CM.assumeInclusiveRange()
-    const llvm::APSInt* quotaVal = CM.getSymVal(C.getState(), quotaSVal.getAsSymExpr());
-    if(quotaVal){
-
-        llvm::errs()<<"CM.getSymVal(quotaSVal) returned "<< quotaVal->toString(10)<<"\n";
-    }else{
-        llvm::errs()<<"CM.getSymVal(quotaSVal) returned NULL\n";
-    }
+//    ConstraintManager &CM = C.getConstraintManager();
+//    //CM.assumeInclusiveRange()
+//    const llvm::APSInt* quotaVal = CM.getSymVal(C.getState(), quotaSVal.getAsSymExpr());
+//    if(quotaVal){
+//
+//        llvm::errs()<<"CM.getSymVal(quotaSVal) returned "<< quotaVal->toString(10)<<"\n";
+//    }else{
+//        llvm::errs()<<"CM.getSymVal(quotaSVal) returned NULL\n";
+//    }
     //C.getAnalysisManager().getConstraintManagerCreator()
-
-
-
-
-
 }
 
 /// Called when the analyzer core starts analyzing a function,
@@ -98,7 +92,6 @@ void ListAllMemLocChecker::checkPreCall(const CallEvent &Call, CheckerContext &C
 /// this callback will be called for both analyzing the top level and for inlining analyze, I'm assuming that there is
 /// no direct call for tasks, so we will analyze it only for the top level
 void ListAllMemLocChecker::checkBeginFunction(CheckerContext &Ctx) const {
-
 
     const FunctionDecl *Func = dyn_cast<FunctionDecl>(Ctx.getStackFrame()->getDecl());
     if(!Func)
@@ -127,28 +120,22 @@ void ListAllMemLocChecker::checkBeginFunction(CheckerContext &Ctx) const {
     auto InstanceIDSval = State->getSVal(Param);
     InstanceIDSval.dump();
     llvm::errs()<<"\n";
-//    auto IDValue = SVB.makeIntVal(0);
 
     dupMepTy::data_type *maxInstances = duplicabsleMap.lookup(StringWrapper(funcName));
     llvm::errs()<<"\n dup: " <<funcName<<" num_instances: "<< std::to_string(*maxInstances)<<"\n";
     for(int i=0;i<*maxInstances;i++){
         llvm::APSInt number(std::to_string(i).c_str());
-        auto newState = State->assumeInclusiveRange(InstanceIDSval.castAs <DefinedOrUnknownSVal >(), number, number, true);
+        Optional<DefinedOrUnknownSVal> sval = InstanceIDSval.castAs <DefinedOrUnknownSVal >();
+        if(!sval)
+            llvm::errs()<<" InstanceIDSval.castAs <DefinedOrUnknownSVal >() returned NULL\n";
+
+        auto &SVB = State->getStateManager().getSValBuilder();
+        DefinedOrUnknownSVal eq_cond = SVB.evalEQ(State, sval.getValue(), SVB.makeIntVal(number).castAs<DefinedOrUnknownSVal>());
+        auto newState = State->assume(eq_cond, true);
+//        auto newState = State->assumeInclusiveRange(sval.getValue(), number, number, true);
         newState = newState->add<instanceIDState>(StringWrapper(std::to_string(i).c_str()));
         Ctx.addTransition(newState);
     }
-
-//    llvm::APSInt number("0");
-//    auto State0 = State->assumeInclusiveRange(InstanceIDSval.castAs <DefinedOrUnknownSVal >(), number, number, true);
-//    auto ParamVal0 = State0->getSVal(Param);
-//    ParamVal0.dump();
-//    Ctx.addTransition(State0);
-
-
-
-
-
-
 
 }
 

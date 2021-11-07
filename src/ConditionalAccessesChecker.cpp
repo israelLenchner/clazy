@@ -3,7 +3,35 @@
 //
 
 #include "ConditionalAccessesChecker.h"
-
+ConditionalAccessesChecker::ConditionalAccessesChecker():bugTypesmap(BTFactory.getEmptyMap()),needsCheck(tasks2CheckF.getEmptySet()){
+    std::ifstream MyReadFile("./cache/ConditionalAccessTasks2Check.txt");
+    string Line;
+    int race_num = 0;
+    while (getline (MyReadFile, Line)) {
+        if(race_num == MAX_RACES){
+            llvm::errs()<<"Reached max races to check, ignoring the next races\n";
+            break;
+        }
+        std::istringstream ss(Line);
+        string nameA, nameB;
+        ss >> nameA >> nameB;
+        needsCheck = tasks2CheckF.add(needsCheck,PairWrapper(std::make_pair(nameA,nameB)));
+        BT[race_num][WriteWrite].reset(new BugType(this,"Write-Write collision",
+                                         "Race " + nameA + "-" + nameB));
+        BT[race_num][ReadWrite].reset(new BugType(this,"Read-Write collision",
+                                        "Race " + nameA + "-" + nameB));
+        PairWrapper pair= PairWrapper(std::make_pair(nameA,nameB));
+        bugTypesmap = BTFactory.add(bugTypesmap, pair ,race_num);
+        llvm::errs()<<"Added pair to raceNum mapping. pair: (" << pair.get().first <<", "<< pair.get().second<<
+        "). race_num: " <<race_num<< "\n";
+        race_num++;
+    }
+    MyReadFile.close();
+    llvm::errs()<<"tasks to check:\n";
+    for(auto it = needsCheck.begin(); it!= needsCheck.end(); ++it){
+        llvm::errs()<<it->get().first<< ", "<< it->get().second<<"\n";
+    }
+}
 
 void ConditionalAccessesChecker::checkBeginFunction(CheckerContext &Ctx) const {
 
@@ -13,30 +41,45 @@ void ConditionalAccessesChecker::checkBeginFunction(CheckerContext &Ctx) const {
     if (!Func)
         return;
     string funcName = Func->getNameAsString();
-
-    // this is only for duplicable task which don't have a direct call (true for all tasks)
-    // Since we use a workaround, the Duplicable tasks are not in top Frame
-//    if(!stackFrame->inTopFrame())
-//        return;
-
     ProgramStateRef State = Ctx.getState();
-    string Name = ( (!stackFrame->inTopFrame()) && (funcName == taskA || funcName == taskB) ) ? funcName: "";
     auto &F = State->getStateManager().get_context<CurTaskName>();
-    State = State->set<CurTaskName>(F.add(F.getEmptySet(),StringWrapper(Name)));
+    //TODO: needs to implement a similar mechanism in the ListAllLoc as weel
+    string Name = "";
+    if(stackFrame->inTopFrame()){
+        // if this is the top frame and this is an aux function then we want to analyze this path.
+        // init read/write map
+        if(funcName.find(auxFunc) != string::npos){
+            Name = funcName;
+//            auto &AccessesMapF = State->getStateManager().get_context<AccessesMap>();
+//            State = State->set<WriteMap>(StringWrapper(taskA),AccessesMapF.getEmptyMap());
+//            State = State->set<WriteMap>(StringWrapper(taskB),AccessesMapF.getEmptyMap());
+//            State = State->set<ReadMap>(StringWrapper(taskA),AccessesMapF.getEmptyMap());
+//            State = State->set<ReadMap>(StringWrapper(taskB),AccessesMapF.getEmptyMap());
 
-    //init read/write map
-    if(stackFrame->inTopFrame() && funcName == auxFunc){
-        auto &AccessesMapF = State->getStateManager().get_context<AccessesMap>();
-        State = State->set<WriteMap>(StringWrapper(taskA),AccessesMapF.getEmptyMap());
-        State = State->set<WriteMap>(StringWrapper(taskB),AccessesMapF.getEmptyMap());
-        State = State->set<ReadMap>(StringWrapper(taskA),AccessesMapF.getEmptyMap());
-        State = State->set<ReadMap>(StringWrapper(taskB),AccessesMapF.getEmptyMap());
+        }
+    }else{
+        // the set is not empty since this is not top of frame
+        string savedName = State->get<CurTaskName>().begin()->get();
+        //Check if this is on a path that needs to be checked (starts at the aux func)
+        if(savedName!=""){
+            //starting a new Task
+            if(isTaskNeeds2BChecked(funcName)){
+                Name = funcName;
+                auto &AccessesMapF = State->getStateManager().get_context<AccessesMap>();
+                State = State->set<WriteMap>(StringWrapper(funcName),AccessesMapF.getEmptyMap());
+                State = State->set<ReadMap>(StringWrapper(funcName),AccessesMapF.getEmptyMap());
+            }
+
+            // this is just a function call inside a task
+            else
+                Name = savedName;
+        }
     }
+
+    State = State->set<CurTaskName>(F.add(F.getEmptySet(),StringWrapper(Name)));
     Ctx.addTransition(State);
 
-
 }
-
 
 void ConditionalAccessesChecker::checkLocation(SVal Loc, bool IsLoad, const Stmt *S, CheckerContext &C) const {
 
@@ -52,12 +95,13 @@ void ConditionalAccessesChecker::checkLocation(SVal Loc, bool IsLoad, const Stmt
     string CurTaskName = CurTaskNameSet.begin()->get();
     if(CurTaskName =="")
         return;
-
     StateSet::Factory &stateSetF = State->getStateManager().get_context<StateSet>();
     AccessesMap::Factory &accessesMapF = State->getStateManager().get_context<AccessesMap>();
 
     const AccessesMap *accessesMap = (IsLoad) ? State->get<ReadMap>(CurTaskName):
             State->get<WriteMap>(CurTaskName) ;
+    if(!accessesMap)
+        llvm::errs()<<"accessesMap is Null\n";
     const StateSet* write = accessesMap->lookup(memRegion) ;
     // Later, in checkEndAnalysis, we'd throw a report against it if a Race is found.
     ExplodedNode *errorNode = C.generateNonFatalErrorNode();
@@ -86,20 +130,23 @@ MemRegionSet findMutualAccesses(const AccessesMap *AMA, const AccessesMap *AMB){
             mutualSet.insert(it->first);
     }
 
-    for(const MemRegion* memRegion : mutualSet){
-        llvm::errs()<<"colliding access on: "<< memRegion->getDescriptiveName().c_str() <<"\n";
-    }
+
+//    for(const MemRegion* memRegion : mutualSet){
+//        llvm::errs()<<"colliding access on: "<< memRegion->getDescriptiveName().c_str() <<"\n";
+//    }
     return mutualSet;
 }
 
-void ConditionalAccessesChecker::reportCollidingAccesses(const AccessesMap *AMA, const AccessesMap *AMB,
-                                                         BugReporter &BR, string bugType, string AAccessType,
-                                                         string BAccessType) const{
+void ConditionalAccessesChecker::reportCollidingAccesses(const AccessesMap *AMA, string nameA, const AccessesMap *AMB, string nameB,
+                                                         BugReporter &BR, AccessKind AAccessType,
+                                                         AccessKind BAccessType, int raceNum) const{
     if(!AMA|| !AMB)
         return;
-    llvm::errs()<<"reportCollidingAccesses: "<<"A " << AAccessType << "s "<< "B "<< BAccessType<< "s\n";
+//    llvm::errs()<<"reportCollidingAccesses: "<<nameA << " " << AAccessType << "s "<<nameB<< " "<< BAccessType<< "s\n";
     MemRegionSet mutualSet = findMutualAccesses(AMA, AMB);
-    llvm::errs()<<"mutualSet size: "<< mutualSet.size()<<"\n";
+//    llvm::errs()<<"mutualSet size: "<< mutualSet.size()<<"\n";
+
+    RaceKind raceKind = (AAccessType == Write && BAccessType == Write) ? WriteWrite : ReadWrite;
     for(const MemRegion* memRegion : mutualSet){
         const StateSet *SSA = AMA->lookup(memRegion);
         const StateSet *SSB = AMB->lookup(memRegion);
@@ -107,20 +154,24 @@ void ConditionalAccessesChecker::reportCollidingAccesses(const AccessesMap *AMA,
         assert(SSA&&SSB);
 //            reportCollidingAccesses(SSA, SSB, BR, (*i));
 
-        if (!BT)
-            BT.reset(new BugType(this, bugType, categories::MemoryError));
-        string desc = string("A ") + AAccessType + "s " + memRegion->getDescriptiveName().c_str();
+
+        string desc = nameA + " " + AccessKindToStrMy(AAccessType) + "s " + memRegion->getDescriptiveName().c_str();
+        llvm::errs()<<"cat: "<<"Race " + nameA + "-" + nameB <<"\n";
+
+        if (!BT[raceNum][raceKind]){
+            BT[raceNum][raceKind].reset(new BugType(this, RaceKindToStr(raceKind), "Race " + nameA + "-" + nameB));
+        }
         for(auto it = SSA->begin(); it != SSA->end(); ++it)
         {
             auto report =
-                    std::make_unique<PathSensitiveBugReport>(*BT, desc, *it);
+                    std::make_unique<PathSensitiveBugReport>(*BT[raceNum][raceKind], desc, *it);
             BR.emitReport(std::move(report));
         }
-        desc = string("B ") + BAccessType + "s " + memRegion->getDescriptiveName().c_str();
+        desc = nameB + " " + AccessKindToStrMy(BAccessType) + "s " + memRegion->getDescriptiveName().c_str();
         for(auto it = SSB->begin(); it != SSB->end(); ++it)
         {
             auto report =
-                    std::make_unique<PathSensitiveBugReport>(*BT, desc, *it);
+                    std::make_unique<PathSensitiveBugReport>(*BT[raceNum][raceKind], desc, *it);
             BR.emitReport(std::move(report));
         }
     }
@@ -143,25 +194,68 @@ void ConditionalAccessesChecker::checkEndAnalysis(ExplodedGraph &G, BugReporter 
         funcName = Func->getNameAsString();
         break;
     }
-    if(funcName!=auxFunc)
+    // this Analysis does not start in an aux function
+    if(funcName.find(auxFunc) == string::npos)
         return;
     for( auto i = G.eop_begin(); i!=G.eop_end(); ++i){
         ProgramStateRef State = (*i)->getState();
         WriteMapTy writeMap = State->get<WriteMap>();
-        const AccessesMap *writeAMA = writeMap.lookup(taskA);
-        const AccessesMap *writeAMB = writeMap.lookup(taskB);
-        WriteMapTy readMap = State->get<ReadMap>();
-        const AccessesMap *readAMA = readMap.lookup(taskA);
-        const AccessesMap *readAMB = readMap.lookup(taskB);
-        if(!writeAMA || !writeAMB)
+        string nameA="", nameB="";
+        const AccessesMap *writeAMA = nullptr, *writeAMB = nullptr;
+        bool first = true;
+        for(auto it=writeMap.begin(); it!=writeMap.end(); ++it){
+            nameA = (first)? it->first.get() : nameA;
+            nameB= (!first)? it->first.get() : nameB;
+            writeAMA = (first) ? writeMap.lookup(it->first.get()) : writeAMA;
+            writeAMB = (!first) ? writeMap.lookup(it->first.get()) : writeAMB;
+            first = false;
+        }
+        if(nameA=="" || nameB =="" || !writeAMA || !writeAMB)
             continue;
-        reportCollidingAccesses(writeAMA, writeAMB, BR, "Write-Write collision", "write", "write");
-        reportCollidingAccesses(writeAMA, readAMB, BR, "Write-Read collision", "write", "read");
-        reportCollidingAccesses(readAMA, writeAMB, BR, "Write-Read collision", "read", "write");
+        WriteMapTy readMap = State->get<ReadMap>();
+        const AccessesMap *readAMA = readMap.lookup(nameA);
+        const AccessesMap *readAMB = readMap.lookup(nameB);
+        if(!readAMA || !readAMB)
+            continue;
+        PairWrapper pair = PairWrapper(std::make_pair(nameA,nameB));
+        PairWrapper pair2 = PairWrapper(std::make_pair(nameB,nameA));
+        const int *raceNum = bugTypesmap.lookup(pair);
+        if(!raceNum && !(raceNum = bugTypesmap.lookup(pair2))){
+            llvm::errs()<<"Cannot find Pair to raceNum mapping for pair: ("<< pair.get().first <<", "<< pair.get().second<< "). skip\n";
+            continue;
+        }
+
+        reportCollidingAccesses(readAMA,writeAMA, nameA, readAMB, writeAMB, nameB, BR, *raceNum);
+
     }
 }
 
+bool ConditionalAccessesChecker::isTaskNeeds2BChecked(string taskName) const{
+    return !getPairs(taskName).empty();
+}
 
+std::list<std::string> ConditionalAccessesChecker::getPairs(string taskName) const{
+    std::list<string> ret = std::list<string>();
+    for(auto it = needsCheck.begin(); it!=needsCheck.end(); ++it){
+        if(taskName == it->get().first){
+            ret.push_back(it->get().second);
+        } else if(taskName == it->get().second){
+            ret.push_back(it->get().first);
+        }
+    }
+    return ret;
+}
+
+void
+ConditionalAccessesChecker::reportCollidingAccesses(const AccessesMap *readA, const AccessesMap *writeA, string nameA,
+                                                    const AccessesMap *readB, const AccessesMap *writeB, string nameB,
+                                                    BugReporter &BR,int raceNum) const {
+    llvm::errs()<<"reportCollidingAccesses: taskA: "<< nameA<< " taskB: "<< nameB<<"\n";
+    reportCollidingAccesses(writeA,nameA, writeB, nameB,BR, Write, Write, raceNum);
+    reportCollidingAccesses(writeA,nameA, readB, nameB, BR, Write, Read, raceNum);
+    reportCollidingAccesses(readA, nameA, writeB, nameB, BR, Read, Write, raceNum);
+
+}
 
 extern "C" const char clang_analyzerAPIVersionString[] =
         CLANG_ANALYZER_API_VERSION_STRING;

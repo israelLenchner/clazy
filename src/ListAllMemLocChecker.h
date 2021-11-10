@@ -27,7 +27,7 @@ using namespace clang;
 using namespace ento;
 using std::string;
 using std::endl;
-using dupSetTy = llvm::ImmutableSet<StringWrapper>;
+using TaskSetTy = llvm::ImmutableSet<StringWrapper>;
 using dupMepTy = llvm::ImmutableMap<StringWrapper,int>;
 
 
@@ -56,10 +56,11 @@ namespace {
     class ListAllMemLocChecker : public CheckerBaseI {
 
         mutable std::unique_ptr<BugType> BT;
-        dupSetTy::Factory F;
-        dupSetTy duplicablesSet;
+        TaskSetTy::Factory F;
+        TaskSetTy duplicablesSet;
         dupMepTy::Factory mapFactory;
         dupMepTy duplicabsleMap;
+        TaskSetTy regularsSet;
     public:
         void checkLocation(SVal Loc, bool IsLoad, const Stmt *S, CheckerContext & C) const;
         void checkEndAnalysis(ExplodedGraph &G, BugReporter &BR, ExprEngine &Eng) const;

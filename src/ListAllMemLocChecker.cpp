@@ -8,7 +8,7 @@ using namespace clang;
 using namespace ento;
 using std::string;
 using std::endl;
-using dupSetTy = llvm::ImmutableSet<StringWrapper>;
+using TaskSetTy = llvm::ImmutableSet<StringWrapper>;
 
 
 
@@ -21,11 +21,13 @@ using dupSetTy = llvm::ImmutableSet<StringWrapper>;
 REGISTER_SET_WITH_PROGRAMSTATE(loadAccessList,accessElement)
 REGISTER_SET_WITH_PROGRAMSTATE(storeAccessList,accessElement)
 REGISTER_SET_WITH_PROGRAMSTATE(instanceIDState, StringWrapper)
+REGISTER_SET_WITH_PROGRAMSTATE(CurTaskName, StringWrapper)
 
 
-ListAllMemLocChecker::ListAllMemLocChecker(): F(true),duplicablesSet(F.getEmptySet()), mapFactory(true), duplicabsleMap(mapFactory.getEmptyMap()){
-    std::ifstream MyReadFile("./cache/duplicable_list.txt");
+ListAllMemLocChecker::ListAllMemLocChecker(): F(true),duplicablesSet(F.getEmptySet()),
+mapFactory(true), duplicabsleMap(mapFactory.getEmptyMap()), regularsSet(F.getEmptySet()){
     string Line;
+    std::ifstream MyReadFile("./cache/duplicable_list.txt");
     while (getline (MyReadFile, Line)) {
         std::istringstream ss(Line);
         string dupName;
@@ -33,6 +35,12 @@ ListAllMemLocChecker::ListAllMemLocChecker(): F(true),duplicablesSet(F.getEmptyS
         ss >> dupName >> num;
         duplicablesSet =F.add(duplicablesSet, StringWrapper(dupName));
         duplicabsleMap = mapFactory.add(duplicabsleMap, StringWrapper(dupName), num);
+    }
+    MyReadFile.close();
+
+    MyReadFile =  std::ifstream("./cache/regular_list.txt");
+    while (getline (MyReadFile, Line)) {
+        regularsSet =F.add(regularsSet, StringWrapper(Line));
     }
     MyReadFile.close();
 
@@ -85,57 +93,54 @@ void ListAllMemLocChecker::checkPreCall(const CallEvent &Call, CheckerContext &C
     //C.getAnalysisManager().getConstraintManagerCreator()
 }
 
-/// Called when the analyzer core starts analyzing a function,
-/// regardless of whether it is analyzed at the top level or is inlined.
-///
-/// check::BeginFunction
+
 /// this callback will be called for both analyzing the top level and for inlining analyze, I'm assuming that there is
 /// no direct call for tasks, so we will analyze it only for the top level
 void ListAllMemLocChecker::checkBeginFunction(CheckerContext &Ctx) const {
-
-    const FunctionDecl *Func = dyn_cast<FunctionDecl>(Ctx.getStackFrame()->getDecl());
+    auto stackFrame = Ctx.getStackFrame();
+    if(!stackFrame->inTopFrame())
+        return;
+    const FunctionDecl *Func = dyn_cast<FunctionDecl>(stackFrame->getDecl());
     if(!Func)
         return;
     string funcName = Func->getNameAsString();
+    ProgramStateRef State = Ctx.getState();
+    auto &F = State->getStateManager().get_context<CurTaskName>();
+    string taskName = (duplicablesSet.contains(StringWrapper(funcName)) ||
+                       regularsSet.contains(StringWrapper(funcName))) ? funcName : "";
+    llvm::errs()<<"setting CurTaskName as: "<<taskName<<" taskName is: "<<funcName<<"\n";
+    State = State->set<CurTaskName>(F.add(F.getEmptySet(),StringWrapper(taskName)));
     llvm::errs()<<"analyzing func: " << funcName << "\n";
-    // we need to do thia analysis only for duplicable tasks.
-    if(!duplicabsleMap.contains(StringWrapper(funcName))){
-        return;
-    }
-    if(!duplicablesSet.contains(StringWrapper(funcName))){
-        return;
-    }
-    const StackFrameContext *stackFrame = Ctx.getStackFrame();
-    // this is only for duplicable task which dont have a direct call (true for all tasks)
-    assert(stackFrame->inTopFrame());
-    // duplicable tasks have only 1 parameter the Instance id
-    assert(Func->getNumParams()==1);
-    const ParmVarDecl *instanceID = Func->getParamDecl(0);
-    llvm::errs()<<"dump instanceID ParmVarDecl: \n";
-    instanceID->dump();
-    const auto *LCtx = Ctx.getLocationContext();
-    auto &State = Ctx.getState();
-    auto &SVB = Ctx.getSValBuilder();
-    auto Param = SVB.makeLoc(State->getRegion(Func->getParamDecl(0), LCtx));
-    auto InstanceIDSval = State->getSVal(Param);
-    InstanceIDSval.dump();
-    llvm::errs()<<"\n";
+    if(duplicablesSet.contains(StringWrapper(funcName))){
+        // this is only for duplicable task which dont have a direct call (true for all tasks)
+        assert(stackFrame->inTopFrame());
+        // duplicable tasks have only 1 parameter the Instance id
+        assert(Func->getNumParams()==1);
+        const ParmVarDecl *instanceID = Func->getParamDecl(0);
+        llvm::errs()<<"dump instanceID ParmVarDecl: \n";
+        instanceID->dump();
+        const auto *LCtx = Ctx.getLocationContext();
+        auto &SVB = Ctx.getSValBuilder();
+        auto Param = SVB.makeLoc(State->getRegion(Func->getParamDecl(0), LCtx));
+        auto InstanceIDSval = State->getSVal(Param);
+        InstanceIDSval.dump();
+        llvm::errs()<<"\n";
 
-    dupMepTy::data_type *maxInstances = duplicabsleMap.lookup(StringWrapper(funcName));
-    llvm::errs()<<"\n dup: " <<funcName<<" num_instances: "<< std::to_string(*maxInstances)<<"\n";
-    for(int i=0;i<*maxInstances;i++){
-        llvm::APSInt number(std::to_string(i).c_str());
-        Optional<DefinedOrUnknownSVal> sval = InstanceIDSval.castAs <DefinedOrUnknownSVal >();
-        if(!sval)
-            llvm::errs()<<" InstanceIDSval.castAs <DefinedOrUnknownSVal >() returned NULL\n";
-
-        auto &SVB = State->getStateManager().getSValBuilder();
-        DefinedOrUnknownSVal eq_cond = SVB.evalEQ(State, sval.getValue(), SVB.makeIntVal(number).castAs<DefinedOrUnknownSVal>());
-        auto newState = State->assume(eq_cond, true);
-//        auto newState = State->assumeInclusiveRange(sval.getValue(), number, number, true);
-        newState = newState->add<instanceIDState>(StringWrapper(std::to_string(i).c_str()));
-        Ctx.addTransition(newState);
+        dupMepTy::data_type *maxInstances = duplicabsleMap.lookup(StringWrapper(funcName));
+        llvm::errs()<<"\n dup: " <<funcName<<" num_instances: "<< std::to_string(*maxInstances)<<"\n";
+        for(int i=0;i<*maxInstances;i++){
+            llvm::APSInt number(std::to_string(i).c_str());
+            Optional<DefinedOrUnknownSVal> sval = InstanceIDSval.castAs <DefinedOrUnknownSVal >();
+            if(!sval)
+                llvm::errs()<<" InstanceIDSval.castAs <DefinedOrUnknownSVal >() returned NULL\n";
+            auto &SVB = State->getStateManager().getSValBuilder();
+            DefinedOrUnknownSVal eq_cond = SVB.evalEQ(State, sval.getValue(), SVB.makeIntVal(number).castAs<DefinedOrUnknownSVal>());
+            State = State->assume(eq_cond, true);
+            State = State->add<instanceIDState>(StringWrapper(std::to_string(i).c_str()));
+        }
     }
+    Ctx.addTransition(State);
+
 
 }
 
@@ -146,6 +151,8 @@ void ListAllMemLocChecker::checkBeginFunction(CheckerContext &Ctx) const {
 /// check::EndFunction
 
 void ListAllMemLocChecker::checkEndFunction(const ReturnStmt *RS, CheckerContext &Ctx) const {
+
+    return;
 
     //TODO: needs to dump memory access only when we finish analyzing a task, not any function
     ProgramStateRef State = Ctx.getState();
@@ -166,14 +173,12 @@ void ListAllMemLocChecker::checkEndFunction(const ReturnStmt *RS, CheckerContext
     if(duplicablesSet.contains(StringWrapper(funcName))){
         fs = std::ofstream ("./cache/DuplicableMemoryLocations", std::ofstream::out | std::ofstream::app);
         const instanceIDStateTy &instanceIDSet = State->get<instanceIDState>();
-//        instanceIDSet.begin()
         fs<<funcName<<"$$$$"<<(*(instanceIDSet.begin())).get()<<"$$$$";
         State =  State->remove<instanceIDState>(*(instanceIDSet.begin()));
     }else{
         fs = std::ofstream("./cache/memoryLocations", std::ofstream::out | std::ofstream::app);
         fs<<funcName<<"$$$$";
     }
-
 
     const loadAccessListTy &loadSymsList = State->get<loadAccessList>();
     for (loadAccessListTy::iterator I = loadSymsList.begin(), E = loadSymsList.end(); I != E; ++I) {
@@ -207,11 +212,54 @@ void ListAllMemLocChecker::checkEndAnalysis(ExplodedGraph &G,
                                             BugReporter &BR,
                                             ExprEngine &Eng) const{
 
+    for( auto i = G.eop_begin(); i!=G.eop_end(); ++i) {
+        ProgramStateRef State = (*i)->getState();
+        CurTaskNameTy CurTaskNameSet = State->get<CurTaskName>();
+        if(CurTaskNameSet.isEmpty()) {
+            llvm::errs() << "CurTaskNameSet is empty\n";
+            continue;
+        }
+        string CurTaskName = CurTaskNameSet.begin()->get();
+        if(CurTaskName =="")
+            continue;
+        std::ofstream fs;
+        llvm::errs()<<"dumping "<< CurTaskName<< " memory locations\n";
+//        std::string funcName = (EnclosingFunctionDecl->getName()).str();
+        if(duplicablesSet.contains(StringWrapper(CurTaskName))){
+            fs = std::ofstream ("./cache/DuplicableMemoryLocations", std::ofstream::out | std::ofstream::app);
+            const instanceIDStateTy &instanceIDSet = State->get<instanceIDState>();
+            fs<<CurTaskName<<"$$$$"<<(*(instanceIDSet.begin())).get()<<"$$$$";
+            State =  State->remove<instanceIDState>(*(instanceIDSet.begin()));
+        }else{
+            fs = std::ofstream("./cache/memoryLocations", std::ofstream::out | std::ofstream::app);
+            fs<<CurTaskName<<"$$$$";
+        }
+        const loadAccessListTy &loadSymsList = State->get<loadAccessList>();
+        for (loadAccessListTy::iterator I = loadSymsList.begin(), E = loadSymsList.end(); I != E; ++I) {
+            accessElement elem=*I;
+            fs<<elem->getDescriptiveName().c_str();
+            loadAccessListTy::iterator T=I;
+            if(T++ != E)
+                fs<<";";
+//            State = State->remove<loadAccessList>(elem);
+        }
 
-    // ((Eng.getCheckerManager()).getChecker<ListAllMemLocChecker>())->c
-    //    ProgramStateRef State = Ctx.getState();
-    //    llvm::ImmutableMap<std::string, regionSet> myMap(State->get<accessList>());
-    //myMap.foreach(Callback &C)
+        const storeAccessListTy &storeSymsList = State->get<storeAccessList>();
+        fs<<"$$$$";
+        for (storeAccessListTy::iterator I = storeSymsList.begin(), E = storeSymsList.end(); I != E; ++I) {
+            accessElement elem=*I;
+            fs<<elem->getDescriptiveName().c_str();
+            loadAccessListTy::iterator T=I;
+            if(T++ != E)
+                fs<<";";
+//            State = State->remove<storeAccessList>(elem);
+        }
+        fs<<endl;
+//        Ctx.addTransition(State);
+        fs.close();
+
+
+    }
 
 
 }
@@ -226,17 +274,17 @@ void ListAllMemLocChecker::checkEndAnalysis(ExplodedGraph &G,
 /// check::Location
 void ListAllMemLocChecker::checkLocation(SVal Loc, bool IsLoad, const Stmt *S,
                                          CheckerContext & C) const{
-    std::string msg;
-    llvm::raw_string_ostream os(msg);
-//    Loc.dumpToStream(os);
-    //Loc.dump();
-    if(Loc.getAsSymExpr()){
-        llvm::errs()<<"getAsSymExpr\n";
-        Loc.getAsSymExpr()->dump();
-    }
 
     const MemRegion* memRegion = Loc.getAsRegion();
     ProgramStateRef State = C.getState();
+    CurTaskNameTy CurTaskNameSet = State->get<CurTaskName>();
+    if(CurTaskNameSet.isEmpty()) {
+        llvm::errs() << "CurTaskNameSet is empty\n";
+        return;
+    }
+    string CurTaskName = CurTaskNameSet.begin()->get();
+    if(CurTaskName =="")
+        return;
     if(IsGlobalVAriable(memRegion)){
         if(IsLoad){
             State = State->add<loadAccessList>(memRegion);
@@ -244,20 +292,6 @@ void ListAllMemLocChecker::checkLocation(SVal Loc, bool IsLoad, const Stmt *S,
             State = State->add<storeAccessList>(memRegion);
         }
     }
-
-//    ExplodedNode *N = C.generateNonFatalErrorNode();
-//    if (!N)
-//        return;
-//
-//    if (!BT)
-//        BT.reset(new BugType(this, "call to main", "example analyzer plugin"));
-//
-//    auto report =
-//            std::make_unique<PathSensitiveBugReport>(*BT, BT->getDescription(), N);
-////    report->addRange(Callee->getSourceRange());
-//    C.emitReport(std::move(report));
-//    llvm::errs()<<"emitting report\n";
-
     C.addTransition(State);
 
 }

@@ -134,7 +134,8 @@ void ListAllMemLocChecker::checkBeginFunction(CheckerContext &Ctx) const {
             if(!sval)
                 llvm::errs()<<" InstanceIDSval.castAs <DefinedOrUnknownSVal >() returned NULL\n";
             auto &SVB = State->getStateManager().getSValBuilder();
-            DefinedOrUnknownSVal eq_cond = SVB.evalEQ(State, sval.getValue(), SVB.makeIntVal(number).castAs<DefinedOrUnknownSVal>());
+            DefinedOrUnknownSVal eq_cond = SVB.evalEQ(State, sval.getValue(),
+                                                      SVB.makeIntVal(number).castAs<DefinedOrUnknownSVal>());
             State = State->assume(eq_cond, true);
             State = State->add<instanceIDState>(StringWrapper(std::to_string(i).c_str()));
         }

@@ -129,11 +129,6 @@ MemRegionSet findMutualAccesses(const AccessesMap *AMA, const AccessesMap *AMB){
         if(AMB->contains(it->first))
             mutualSet.insert(it->first);
     }
-
-
-//    for(const MemRegion* memRegion : mutualSet){
-//        llvm::errs()<<"colliding access on: "<< memRegion->getDescriptiveName().c_str() <<"\n";
-//    }
     return mutualSet;
 }
 
@@ -142,21 +137,15 @@ void ConditionalAccessesChecker::reportCollidingAccesses(const AccessesMap *AMA,
                                                          AccessKind BAccessType, int raceNum) const{
     if(!AMA|| !AMB)
         return;
-//    llvm::errs()<<"reportCollidingAccesses: "<<nameA << " " << AAccessType << "s "<<nameB<< " "<< BAccessType<< "s\n";
     MemRegionSet mutualSet = findMutualAccesses(AMA, AMB);
-//    llvm::errs()<<"mutualSet size: "<< mutualSet.size()<<"\n";
-
     RaceKind raceKind = (AAccessType == Write && BAccessType == Write) ? WriteWrite : ReadWrite;
     for(const MemRegion* memRegion : mutualSet){
         const StateSet *SSA = AMA->lookup(memRegion);
         const StateSet *SSB = AMB->lookup(memRegion);
         // memRegion must be in both maps
         assert(SSA&&SSB);
-//            reportCollidingAccesses(SSA, SSB, BR, (*i));
-
-
-        string desc = nameA + " " + AccessKindToStrMy(AAccessType) + "s " + memRegion->getDescriptiveName().c_str();
-        llvm::errs()<<"cat: "<<"Race " + nameA + "-" + nameB <<"\n";
+        string desc = nameA + " " + AccessKindToStrMy(AAccessType) + "s " + memRegion->getDescriptiveName().c_str() +" here.";
+//        llvm::errs()<<"Race: found a "<< RaceKindToStr(raceKind)<<" collision between " << nameA << " and "<< nameB << "\n";
 
         if (!BT[raceNum][raceKind]){
             BT[raceNum][raceKind].reset(new BugType(this, RaceKindToStr(raceKind), "Race " + nameA + "-" + nameB));
@@ -224,9 +213,7 @@ void ConditionalAccessesChecker::checkEndAnalysis(ExplodedGraph &G, BugReporter 
             llvm::errs()<<"Cannot find Pair to raceNum mapping for pair: ("<< pair.get().first <<", "<< pair.get().second<< "). skip\n";
             continue;
         }
-
         reportCollidingAccesses(readAMA,writeAMA, nameA, readAMB, writeAMB, nameB, BR, *raceNum);
-
     }
 }
 
@@ -250,7 +237,7 @@ void
 ConditionalAccessesChecker::reportCollidingAccesses(const AccessesMap *readA, const AccessesMap *writeA, string nameA,
                                                     const AccessesMap *readB, const AccessesMap *writeB, string nameB,
                                                     BugReporter &BR,int raceNum) const {
-    llvm::errs()<<"reportCollidingAccesses: taskA: "<< nameA<< " taskB: "<< nameB<<"\n";
+//    llvm::errs()<<"reportCollidingAccesses: taskA: "<< nameA<< " taskB: "<< nameB<<"\n";
     reportCollidingAccesses(writeA,nameA, writeB, nameB,BR, Write, Write, raceNum);
     reportCollidingAccesses(writeA,nameA, readB, nameB, BR, Write, Read, raceNum);
     reportCollidingAccesses(readA, nameA, writeB, nameB, BR, Read, Write, raceNum);

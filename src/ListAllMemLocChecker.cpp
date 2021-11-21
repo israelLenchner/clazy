@@ -108,16 +108,16 @@ void ListAllMemLocChecker::checkBeginFunction(CheckerContext &Ctx) const {
     auto &F = State->getStateManager().get_context<CurTaskName>();
     string taskName = (duplicablesSet.contains(StringWrapper(funcName)) ||
                        regularsSet.contains(StringWrapper(funcName))) ? funcName : "";
-    llvm::errs()<<"setting CurTaskName as: "<<taskName<<" taskName is: "<<funcName<<"\n";
+//    llvm::errs()<<"setting CurTaskName as: "<<taskName<<" taskName is: "<<funcName<<"\n";
     State = State->set<CurTaskName>(F.add(F.getEmptySet(),StringWrapper(taskName)));
-    llvm::errs()<<"analyzing func: " << funcName << "\n";
+    Ctx.addTransition(State);
     if(duplicablesSet.contains(StringWrapper(funcName))){
         // this is only for duplicable task which dont have a direct call (true for all tasks)
         assert(stackFrame->inTopFrame());
         // duplicable tasks have only 1 parameter the Instance id
         assert(Func->getNumParams()==1);
         const ParmVarDecl *instanceID = Func->getParamDecl(0);
-        llvm::errs()<<"dump instanceID ParmVarDecl: \n";
+//        llvm::errs()<<"dump instanceID ParmVarDecl: \n";
         instanceID->dump();
         const auto *LCtx = Ctx.getLocationContext();
         auto &SVB = Ctx.getSValBuilder();
@@ -127,7 +127,7 @@ void ListAllMemLocChecker::checkBeginFunction(CheckerContext &Ctx) const {
         llvm::errs()<<"\n";
 
         dupMepTy::data_type *maxInstances = duplicabsleMap.lookup(StringWrapper(funcName));
-        llvm::errs()<<"\n dup: " <<funcName<<" num_instances: "<< std::to_string(*maxInstances)<<"\n";
+//        llvm::errs()<<"\n dup: " <<funcName<<" num_instances: "<< std::to_string(*maxInstances)<<"\n";
         for(int i=0;i<*maxInstances;i++){
             llvm::APSInt number(std::to_string(i).c_str());
             Optional<DefinedOrUnknownSVal> sval = InstanceIDSval.castAs <DefinedOrUnknownSVal >();
@@ -136,11 +136,17 @@ void ListAllMemLocChecker::checkBeginFunction(CheckerContext &Ctx) const {
             auto &SVB = State->getStateManager().getSValBuilder();
             DefinedOrUnknownSVal eq_cond = SVB.evalEQ(State, sval.getValue(),
                                                       SVB.makeIntVal(number).castAs<DefinedOrUnknownSVal>());
-            State = State->assume(eq_cond, true);
-            State = State->add<instanceIDState>(StringWrapper(std::to_string(i).c_str()));
+            if(eq_cond.isUnknown())
+                llvm::errs()<<"eq_cond isUnknown\n";
+            auto newState = State->assume(eq_cond, true);
+            if(!newState){
+                llvm::errs()<<"cannot assume instance id " <<i<<'\n';
+            }
+            newState = newState->add<instanceIDState>(StringWrapper(std::to_string(i).c_str()));
+            Ctx.addTransition(newState);
         }
     }
-    Ctx.addTransition(State);
+
 
 
 }
@@ -217,14 +223,14 @@ void ListAllMemLocChecker::checkEndAnalysis(ExplodedGraph &G,
         ProgramStateRef State = (*i)->getState();
         CurTaskNameTy CurTaskNameSet = State->get<CurTaskName>();
         if(CurTaskNameSet.isEmpty()) {
-            llvm::errs() << "CurTaskNameSet is empty\n";
+            llvm::errs() << "checkEndAnalysis: CurTaskNameSet is empty\n";
             continue;
         }
         string CurTaskName = CurTaskNameSet.begin()->get();
         if(CurTaskName =="")
             continue;
         std::ofstream fs;
-        llvm::errs()<<"dumping "<< CurTaskName<< " memory locations\n";
+//        llvm::errs()<<"dumping "<< CurTaskName<< " memory locations\n";
 //        std::string funcName = (EnclosingFunctionDecl->getName()).str();
         if(duplicablesSet.contains(StringWrapper(CurTaskName))){
             fs = std::ofstream ("./cache/DuplicableMemoryLocations", std::ofstream::out | std::ofstream::app);
@@ -238,7 +244,10 @@ void ListAllMemLocChecker::checkEndAnalysis(ExplodedGraph &G,
         const loadAccessListTy &loadSymsList = State->get<loadAccessList>();
         for (loadAccessListTy::iterator I = loadSymsList.begin(), E = loadSymsList.end(); I != E; ++I) {
             accessElement elem=*I;
-            fs<<elem->getDescriptiveName().c_str();
+            if(elem->canPrintPretty())
+                fs<<elem->getDescriptiveName().c_str();
+            else
+                llvm::errs()<<"canPrintPretty returned false\n";
             loadAccessListTy::iterator T=I;
             if(T++ != E)
                 fs<<";";

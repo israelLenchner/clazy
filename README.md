@@ -1,4 +1,6 @@
-clazy v1.9
+*WARNING:* master is the development branch. Please use the v1.9 branch.
+
+clazy v1.10
 ===========
 
 clazy is a compiler plugin which allows clang to understand Qt semantics. You get more than 50 Qt related compiler warnings, ranging from unneeded memory allocations to misusage of API, including fix-its for automatic refactoring.
@@ -43,6 +45,13 @@ You can get clazy from:
 - <https://github.com/KDE/clazy>
 - <https://invent.kde.org/sdk/clazy>
 
+
+# Supported platforms
+
+Clazy has been tested on Linux, macOS and Windows/MSVC.
+Other platforms are not supported but we'll gladly accept patches.
+
+
 # Pre-built binaries
 
 Pre-built clazy binaries for MSVC and Linux AppImage are produced by KDAB, you can get them from https://downloads.kdab.com/clazy/.
@@ -58,7 +67,7 @@ Pre-built clazy binaries for MSVC and Linux AppImage are produced by KDAB, you c
 - Other distros: Check llvm/clang build docs.
 
 ### Build and install clang
-clang and LLVM >= 7.0 are required.
+clang and LLVM >= 8.0 are required.
 
 If your distro provides clang then you can skip this step.
 
@@ -178,9 +187,9 @@ Compile your programs with it instead of clang++/g++.
 Note that this command is just a convenience wrapper which calls:
 `clang++ -Xclang -load -Xclang ClazyPlugin.so -Xclang -add-plugin -Xclang clazy`
 
-If you have multiple versions of clang installed (say clang++-3.8 and clang++-3.9)
+If you have multiple versions of clang installed (say clang++-10 and clang++-11)
 you can choose which one to use by setting the CLANGXX environment variable, like so:
-`export CLANGXX=clang++-3.8; clazy`
+`export CLANGXX=clang++-11; clazy`
 
 To build a CMake project use:
  `cmake . -DCMAKE_CXX_COMPILER=clazy`
@@ -228,10 +237,10 @@ clazy runs all checks from level1 by default.
     - [qt-keywords](docs/checks/README-qt-keywords.md)    (fix-qt-keywords)
     - [qt4-qstring-from-array](docs/checks/README-qt4-qstring-from-array.md)    (fix-qt4-qstring-from-array)
     - [qt6-deprecated-api-fixes](docs/checks/README-qt6-deprecated-api-fixes.md)    (fix-qt6-deprecated-api-fixes)
+    - [qt6-fwd-fixes](docs/checks/README-qt6-fwd-fixes.md)    (fix-qt6-fwd-fixes)
     - [qt6-header-fixes](docs/checks/README-qt6-header-fixes.md)    (fix-qt6-header-fixes)
     - [qt6-qhash-signature](docs/checks/README-qt6-qhash-signature.md)    (fix-qt6-qhash-signature)
     - [qt6-qlatin1stringchar-to-u](docs/checks/README-qt6-qlatin1stringchar-to-u.md)    (fix-qt6-qlatin1stringchar-to-u)
-    - [qt6-fwd-fixes](docs/checks/README-qt6-fwd-fixes.md)    (fix-qt6-fwd-fixes)
     - [qvariant-template-instantiation](docs/checks/README-qvariant-template-instantiation.md)
     - [raw-environment-function](docs/checks/README-raw-environment-function.md)
     - [reserve-candidates](docs/checks/README-reserve-candidates.md)
@@ -289,7 +298,8 @@ clazy runs all checks from level1 by default.
     - [qlatin1string-non-ascii](docs/checks/README-qlatin1string-non-ascii.md)
     - [qproperty-without-notify](docs/checks/README-qproperty-without-notify.md)
     - [qstring-left](docs/checks/README-qstring-left.md)
-    - [range-loop](docs/checks/README-range-loop.md)    (fix-range-loop-add-ref,fix-range-loop-add-qasconst)
+    - [range-loop-detach](docs/checks/README-range-loop-detach.md)    (fix-range-loop-add-qasconst)
+    - [range-loop-reference](docs/checks/README-range-loop-reference.md)    (fix-range-loop-add-ref)
     - [returning-data-from-temporary](docs/checks/README-returning-data-from-temporary.md)
     - [rule-of-two-soft](docs/checks/README-rule-of-two-soft.md)
     - [skipped-base-method](docs/checks/README-skipped-base-method.md)
@@ -470,6 +480,8 @@ doing triaging is time not spent writing fixes.
 
 A minimal testcase is also something I can copy to the test suite.
 
+Make sure you can reproduce with clazy (outside of QtCreator), otherwise it can be a QtCreator bug instead,
+which you can report at <https://bugreports.qt.io/>.
 
 
 # Authors
@@ -491,6 +503,7 @@ with contributions from:
 - Nikolai Kosjar
 - Jesper K. Pedersen
 - Lucie Gerard
+- Christian Schärf
 
 qt6-* porting checks written by Lucie Gerard <lucie.gerard@qt.io>
 

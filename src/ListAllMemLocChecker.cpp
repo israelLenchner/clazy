@@ -110,7 +110,6 @@ void ListAllMemLocChecker::checkBeginFunction(CheckerContext &Ctx) const {
                        regularsSet.contains(StringWrapper(funcName))) ? funcName : "";
 //    llvm::errs()<<"setting CurTaskName as: "<<taskName<<" taskName is: "<<funcName<<"\n";
     State = State->set<CurTaskName>(F.add(F.getEmptySet(),StringWrapper(taskName)));
-    Ctx.addTransition(State);
     if(duplicablesSet.contains(StringWrapper(funcName))){
         // this is only for duplicable task which dont have a direct call (true for all tasks)
         assert(stackFrame->inTopFrame());
@@ -145,7 +144,8 @@ void ListAllMemLocChecker::checkBeginFunction(CheckerContext &Ctx) const {
             newState = newState->add<instanceIDState>(StringWrapper(std::to_string(i).c_str()));
             Ctx.addTransition(newState);
         }
-    }
+    } else
+        Ctx.addTransition(State);
 
 
 
@@ -230,11 +230,15 @@ void ListAllMemLocChecker::checkEndAnalysis(ExplodedGraph &G,
         if(CurTaskName =="")
             continue;
         std::ofstream fs;
-//        llvm::errs()<<"dumping "<< CurTaskName<< " memory locations\n";
+        llvm::errs()<<"dumping "<< CurTaskName<< " memory locations\n";
 //        std::string funcName = (EnclosingFunctionDecl->getName()).str();
         if(duplicablesSet.contains(StringWrapper(CurTaskName))){
             fs = std::ofstream ("./cache/DuplicableMemoryLocations", std::ofstream::out | std::ofstream::app);
             const instanceIDStateTy &instanceIDSet = State->get<instanceIDState>();
+            if(instanceIDSet.isEmpty()){
+                llvm::errs()<<"instanceIDSet is empty, task name:"<< CurTaskName <<"\n";
+                continue;
+            }
             fs<<CurTaskName<<"$$$$"<<(*(instanceIDSet.begin())).get()<<"$$$$";
             State =  State->remove<instanceIDState>(*(instanceIDSet.begin()));
         }else{
@@ -244,10 +248,11 @@ void ListAllMemLocChecker::checkEndAnalysis(ExplodedGraph &G,
         const loadAccessListTy &loadSymsList = State->get<loadAccessList>();
         for (loadAccessListTy::iterator I = loadSymsList.begin(), E = loadSymsList.end(); I != E; ++I) {
             accessElement elem=*I;
-            if(elem->canPrintPretty())
-                fs<<elem->getDescriptiveName().c_str();
-            else
-                llvm::errs()<<"canPrintPretty returned false\n";
+//            elem->dump();
+//            llvm::errs()<<"\n";
+//            llvm::errs()<<"getString:" <<elem->getString()<<"\n";
+//            fs<<elem->getDescriptiveName().c_str();
+            fs<<elem;
             loadAccessListTy::iterator T=I;
             if(T++ != E)
                 fs<<";";
@@ -258,7 +263,9 @@ void ListAllMemLocChecker::checkEndAnalysis(ExplodedGraph &G,
         fs<<"$$$$";
         for (storeAccessListTy::iterator I = storeSymsList.begin(), E = storeSymsList.end(); I != E; ++I) {
             accessElement elem=*I;
-            fs<<elem->getDescriptiveName().c_str();
+//            elem->dump();
+//            fs<<elem->getDescriptiveName().c_str();
+            fs<<elem;
             loadAccessListTy::iterator T=I;
             if(T++ != E)
                 fs<<";";

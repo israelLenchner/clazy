@@ -251,8 +251,8 @@ void ListAllMemLocChecker::checkEndAnalysis(ExplodedGraph &G,
 //            elem->dump();
 //            llvm::errs()<<"\n";
 //            llvm::errs()<<"getString:" <<elem->getString()<<"\n";
-//            fs<<elem->getDescriptiveName().c_str();
-            fs<<elem;
+            fs<<elem->getDescriptiveName().c_str();
+//            fs<<elem;
             loadAccessListTy::iterator T=I;
             if(T++ != E)
                 fs<<";";
@@ -265,8 +265,8 @@ void ListAllMemLocChecker::checkEndAnalysis(ExplodedGraph &G,
         for (storeAccessListTy::iterator I = storeSymsList.begin(), E = storeSymsList.end(); I != E; ++I) {
             accessElement elem=*I;
 //            elem->dump();
-//            fs<<elem->getDescriptiveName().c_str();
-            fs<<elem;
+            fs<<elem->getDescriptiveName().c_str();
+//            fs<<elem;
             loadAccessListTy::iterator T=I;
             if(T++ != E)
                 fs<<";";
